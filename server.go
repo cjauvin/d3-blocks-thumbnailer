@@ -60,15 +60,12 @@ func handler(w http.ResponseWriter, r *http.Request, servedPath string) {
 			if err != nil {
 				gistImageBase64Strings[gistID] = "not found"
 			} else {
-				gistImageBase64Strings[gistID] = "ok"
 				fInfo, _ := imgFile.Stat()
 				var size int64 = fInfo.Size()
 				buf := make([]byte, size)
-
 				// read file content into buffer
 				fReader := bufio.NewReader(imgFile)
 				fReader.Read(buf)
-
 				// convert the buffer bytes to base64 string - use buf.Bytes() for new image
 				gistImageBase64Strings[gistID] = base64.StdEncoding.EncodeToString(buf)
 			}
