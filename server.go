@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,8 +17,9 @@ type POSTInput struct {
 	Gists []string
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func handler(w http.ResponseWriter, r *http.Request, servedPath string) {
 
+	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	bn := filepath.Base(r.URL.String())
 	gistID := strings.TrimSuffix(bn, filepath.Ext(bn))
 
@@ -24,7 +27,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 		// A gist_id has been detected in the url, so simply serve the
 		// file directly
-		http.ServeFile(w, r, fmt.Sprintf("./thumbnails/%s.png", gistID))
+		fnPath := fmt.Sprintf("%s/%s.png", servedPath, gistID)
+		if _, err := os.Stat(fnPath); err == nil {
+			http.ServeFile(w, r, fnPath)
+			fmt.Println(fmt.Sprintf("Served %s to %s", fnPath, ip))
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(fmt.Sprintf("gist thumbnail %s does not exist", gistID)))
+			fmt.Println(fmt.Sprintf("%s requested %s (404)", ip, fnPath))
+		}
 
 	} else {
 
@@ -38,12 +49,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if err != nil || len(pi.Gists) == 0 {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("cannot parse JSON POST request"))
+			fmt.Println(fmt.Sprintf("Bad JSON from %s (500)", ip))
 			return
 		}
 
 		gistImageBase64Strings := make(map[string]string)
 		for _, gistID := range pi.Gists {
-			imgFile, err := os.Open(fmt.Sprintf("./thumbnails/%s.png", gistID))
+			imgFile, err := os.Open(fmt.Sprintf("%s/%s.png", servedPath, gistID))
 			defer imgFile.Close()
 			if err != nil {
 				gistImageBase64Strings[gistID] = "not found"
@@ -65,10 +77,21 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		js, _ := json.Marshal(gistImageBase64Strings)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(js)
+		fmt.Println(fmt.Sprintf("Served JSON array of %d images to %s", len(gistImageBase64Strings), ip))
 	}
 }
 
 func main() {
-	http.HandleFunc("/", handler)
-	http.ListenAndServe(":8080", nil)
+
+	port := flag.Int("port", 8080, "listening port")
+	path := flag.String("path", "./thumbnails", "path of served thumbnail folder")
+	flag.Parse()
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		handler(w, r, *path)
+	})
+	err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil)
+	if err != nil {
+		fmt.Println(err)
+	}
+
 }
