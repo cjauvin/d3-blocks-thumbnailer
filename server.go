@@ -19,6 +19,15 @@ type POSTInput struct {
 
 func handler(w http.ResponseWriter, r *http.Request, servedPath string) {
 
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+
+	// Stop here if its Preflighted OPTIONS request
+	if r.Method == "OPTIONS" {
+		return
+	}
+
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	bn := filepath.Base(r.URL.String())
 	gistID := strings.TrimSuffix(bn, filepath.Ext(bn))
